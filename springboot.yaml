@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app-deployment
+  labels:
+    app: my-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+        - name: my-container
+          image: ${IMAGE_NAME}:${IMAGE_TAG}
+          ports:
+            - containerPort: 8080  
+          env:
+            - name: DB_HOST
+              value: "<DB_HOST>"  
+            - name: DB_PORT
+              value: "<DB_PORT>" 
+            - name: DB_NAME
+              value: "<DB_NAME>" 
+            - name: DB_USER
+              value: "<DB_USER>" 
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-secrets  # The name of the Kubernetes secret
+                  key: password  # The key within the secret where the password is stored
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app-service
+spec:
+  selector:
+    app: my-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080  
+  type: NodePort  
