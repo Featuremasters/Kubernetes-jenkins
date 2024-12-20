@@ -1,0 +1,71 @@
+pipeline {
+    agent any
+    environment {
+        JAVA_HOME = '/usr/lib/jvm/java-8-openjdk' // Path to JDK 8
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
+    }
+    stages {
+        stage('Verify JDK 8') {
+            steps {
+                script {
+                    def jdkInstalled = sh(script: 'java -version 2>&1 | grep "1.8"', returnStatus: true) == 0
+                    if (jdkInstalled) {
+                        echo 'JDK 8 is already installed.'
+                    } else {
+                        echo 'JDK 8 is not installed. Installing...'
+                        sh '''
+                            sudo apt update
+                            sudo apt install -y openjdk-8-jdk
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Check JDK Version') {
+            steps {
+                sh 'java -version'
+            }
+        }
+        stage('Code Checkout') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/master']],
+                    extensions: [],
+                    userRemoteConfigs: [[
+                        credentialsId: 'GitHubCreds',
+                        url: 'https://github.com/Featuremasters/Kubernetes-jenkins.git'
+                    ]]
+                ])
+            }
+        }
+        stage('Build Automation') {
+            steps {
+                script {
+                    if (fileExists('pom.xml')) {
+                        sh '''
+                            ls -lart
+                            mvn clean install
+                            ls -lart target
+                        '''
+                    } else {
+                        error 'pom.xml not found, skipping build stage.'
+                    }
+                }
+            }
+        }
+        stage('Code Deployment') {
+            steps {
+                echo 'Deployment steps will be added here.'
+            }
+        }
+    }
+    post {
+        always {
+            echo 'Pipeline execution completed.'
+        }
+        failure {
+            echo 'Pipeline failed.'
+        }
+    }
+}
