@@ -1,8 +1,10 @@
 pipeline {
     agent any
     environment {
-        JAVA_HOME = '/usr/lib/jvm/java-8-openjdk' // Path to JDK 8
+        JAVA_HOME = '/usr/lib/jvm/java-8-openjdk'
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
+        IMAGE_NAME = 'your-docker-repo/your-image-name'
+        IMAGE_TAG = "${GIT_COMMIT}"
     }
     stages {
         stage('Verify JDK 8') {
@@ -29,43 +31,49 @@ pipeline {
         stage('Code Checkout') {
             steps {
                 checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: '*/master']],
-                    extensions: [],
-                    userRemoteConfigs: [[
-                        credentialsId: 'GitHubCreds',
-                        url: 'https://github.com/Featuremasters/Kubernetes-jenkins.git'
-                    ]]
-                ])
+                    $class: 'GitSCM',branches: [[name: '*/master']],extensions: [],userRemoteConfigs: [[credentialsId: 'GitHubCreds',url: 'https://github.com/Featuremasters/Kubernetes-jenkins.git']]])
             }
         }
-        stage('Build Automation') {
+        stage('Build Automation'){
+		sh """
+			ls -lart
+			mvn clean install
+			ls -lart target
+	
+		"""
+	}
+        stage('Build Docker Image') {
             steps {
                 script {
-                    if (fileExists('pom.xml')) {
+                    echo 'Building Docker image...'
+                    sh '''
+                        docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+                    '''
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    echo 'Pushing Docker image to repository...'
+                    sh '''
+                        docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}
+                        docker push ${IMAGE_NAME}:${IMAGE_TAG}
+                    '''
+                }
+            }
+        }
+        stage('Deploy to Kubernetes') {
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig-file', variable: 'KUBECONFIG')]) {
+                    script {
+                        echo 'Deploying to Kubernetes...'
                         sh '''
-                            ls -lart
-                            mvn clean install
-                            ls -lart target
-                        '''
-                    } else {
-                        error 'pom.xml not found, skipping build stage.'
+                            export KUBECONFIG=${KUBECONFIG}
+                            kubectl set image deployment/your-deployment-name your-container-name=${IMAGE_NAME}:${IMAGE_TAG}
+                            kubectl rollout status deployment/your-deployment-name'''
                     }
                 }
             }
         }
-        stage('Code Deployment') {
-            steps {
-                echo 'Deployment steps will be added here.'
-            }
-        }
     }
-    post {
-        always {
-            echo 'Pipeline execution completed.'
-        }
-        failure {
-            echo 'Pipeline failed.'
-        }
-    }
-}
